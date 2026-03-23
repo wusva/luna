@@ -17,35 +17,16 @@ export async function POST(req: NextRequest) {
 
     const supabase = createAdminClient();
 
-    // Upsert profile
-    const { data: profile, error } = await supabase
+    const fullName = `${telegramUser.first_name}${telegramUser.last_name ? " " + telegramUser.last_name : ""}`;
+
+    // Check if profile already exists
+    const { data: existing } = await supabase
       .from("profiles")
-      .upsert(
-        {
-          telegram_id: telegramUser.id,
-          telegram_username: telegramUser.username || null,
-          name:
-            profile?.name ||
-            `${telegramUser.first_name}${telegramUser.last_name ? " " + telegramUser.last_name : ""}`,
-          last_active_at: new Date().toISOString(),
-        },
-        { onConflict: "telegram_id", ignoreDuplicates: false }
-      )
       .select()
+      .eq("telegram_id", telegramUser.id)
       .single();
 
-    if (error || !profile) {
-      // Try fetching existing profile on upsert conflict
-      const { data: existing } = await supabase
-        .from("profiles")
-        .select()
-        .eq("telegram_id", telegramUser.id)
-        .single();
-
-      if (!existing) {
-        return NextResponse.json({ error: "DB error" }, { status: 500 });
-      }
-
+    if (existing) {
       // Update last_active
       await supabase
         .from("profiles")
@@ -56,6 +37,22 @@ export async function POST(req: NextRequest) {
         .eq("id", existing.id);
 
       return await issueToken(existing);
+    }
+
+    // Create new profile
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .insert({
+        telegram_id: telegramUser.id,
+        telegram_username: telegramUser.username || null,
+        name: fullName,
+        last_active_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error || !profile) {
+      return NextResponse.json({ error: "DB error" }, { status: 500 });
     }
 
     return await issueToken(profile);
