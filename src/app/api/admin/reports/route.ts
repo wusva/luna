@@ -22,9 +22,9 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Enrich with user profiles
-  const reporterIds = [...new Set((data || []).map((r) => r.reporter_id))];
-  const reportedIds = [...new Set((data || []).map((r) => r.reported_id))];
-  const allIds = [...new Set([...reporterIds, ...reportedIds])];
+  const allIds = Array.from(new Set(
+    (data || []).flatMap((r) => [r.reporter_id, r.reported_id])
+  ));
 
   const { data: profiles } = await supabase
     .from("profiles")
